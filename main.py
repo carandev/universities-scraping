@@ -1,8 +1,10 @@
 from typing import Union
 
 from fastapi import FastAPI
+from fastapi.params import Depends
 from pydantic import BaseModel
-from sqlmodel import Field, SQLModel, create_engine
+from sqlalchemy.sql.annotation import Annotated
+from sqlmodel import Field, SQLModel, create_engine, Session
 
 app = FastAPI()
 
@@ -36,11 +38,21 @@ class Subject(SQLModel, table=True):
     semester: int
     carrer_id: int = Field(foreign_key="carrer.id")
 
+connect_args = {"check_same_thread": False}
+engine = create_engine(DATABASE_URL, echo=True, connect_args=connect_args)
 
-engine = create_engine(DATABASE_URL, echo=True)
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
 
-SQLModel.metadata.create_all(engine)
+def get_session():
+    with Session(engine) as session:
+        yield session
 
+SessionDep = Annotated[Session, Depends(get_session)]
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
 @app.get("/")
 def read_root():
